@@ -1,101 +1,259 @@
+<!-- dashboard.html -->
 {% extends 'dashboard-base/base.html' %}
+
 {% block content %}
-<section class="position-relative">
-    <div class="container section-content mt-5">
-        <div class="d-flex justify-content-between align-items-center">
-            <h1 class="page-title">Expense</h1>
-            <button class="btn btn-primary" id="add-expense-button">Add expense</button>
-        </div>
-        <div class="content-container row position-relative">
-            <div class="expense-cards col col-12 col-lg-4">
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h2 class="card-title">Monthly Expense Total</h2>
-                    </div>
-                    <div class="card-body">
-                        <p class="cart-text lead">This month's total expense: {{ monthly_totals.monthly_total }}</p>
-                    </div>
-                </div>
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h2 class="card-title">Yearly Expense Total</h2>
-                    </div>
-                    <div class="card-body">
-                        <p class="cart-text lead">This year's total expense: {{ yearly_totals.yearly_total }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="recent-expenses-table col col-lg-8 mt-3">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Recent Expenses</h2>
-                    </div>
-                    <div class="card-body overflow-auto">
-                        {% if expenses %}
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Date</th>
-                                    <th scope="col">Amount</th>
-                                    <th scope="col">Description</th>
-                                    <th scope="col">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for expense in expenses %}
-                                <tr>
-                                    <th scope="row">{{ expense.date }}</th>
-                                    <td>{{ expense.amount }}</td>
-                                    <td>{{ expense.description }}</td>
-                                    <td>
-                                        <a class="link link-success"
-                                            href="{% url 'update_expense' expense.id %}">Update</a>
-                                        <a class="link link-success"
-                                            href="{% url 'delete_expense' expense.id %}">Delete</a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        {% else %}
-                        <p class='lead'>No expenses recorded.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
+
+<!-- Add Code to the <head> tag -->
+{% block extra_corecss %}
+
+<style>
+    /* Existing CSS for .graph-container and other styles */
+ /* Style for the doughnut chart container */
+ .chart-container {
+        width: 80%;
+        max-width: 600px;
+        height: 300px;
+        margin: 20px auto;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2); /* Shadow for 3D effect */
+        border-radius: 10px; /* Rounded corners */
+        overflow: hidden; /* Ensures the canvas fits within the rounded corners */
+        background: #f8f9fa; /* Light background color */
+    }
+
+    /* Ensure the canvas fills the container */
+    .chart-container canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .chart-container {
+            height: 300px; /* Adjust height for smaller devices */
+        }
+    }
+
+    /* Additional styling for the card */
+    .card {
+        border: 1px solid #b0c4de; /* Light blue border */
+    }
+
+ 
+
+
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .chart-container {
+            height: 300px; /* Adjust height for smaller devices */
+        }
+    }
+</style>
+{% endblock extra_corecss %}
+
+<header class="container text-center">
+    <div class="user-section">
+        {% if not user.is_authenticated %}
+        <p class="lead">Please log in to view this page.</p>
+        {% endif %}
     </div>
-    <dialog id="add-expense-form" class="form-dialog p-4">
-        <h3 class="card-title mb-2">Add expense</h3>
-        <button id="add-expense-close-button" class="btn btn-danger close-button">X</button>
-        <form method="post" action="{% url 'expenditure' %}">
-            {% csrf_token %}
-            {% for field in form %}
-            <div class="form-group mt-3">
-                {{ field|as_crispy_field }}
-            </div>
-            {% endfor %}
-            <div class="row mt-3 justify-content-end">
-                <div class="col col-12 col-lg-3"><button type="submit" class="btn btn-primary w-100">Record
-                        Expense</button>
+</header>
+<div class="container mt-5">
+    <article class="row d-flex align-items-center justify-content-center">
+
+        <!-- EXPENDITURES -->
+        <div class="col-lg-5 col-md-8 mb-5 col-sm-12">
+            <div class="card shadow h-100">
+                <!-- Card Header -->
+                <header>
+                    <h2 class="card-header text-center">EXPENDITURE</h2>
+                </header>
+
+                <!-- Card Thumbnail -->
+                <div class="card-body p-0 mt-2">
+                    <div class="m-4"
+                    <div class="chart-container">
+                        <canvas id="expenseGraph"></canvas>
+                    </div>
                 </div>
+                <!-- Card Body -->
+                <!-- Weekly -->
+                <section class="card-body pt-1 px-2 pb-1 border">
+                    <div class="row">
+                        <div class="col-12 d-inline-block">
+                            <div class="p-1">
+
+                                <div class="d-flex justify-content-between">
+                                    <h4 class="p-0 m-0">Weekly</h4>
+                                    <h4 class="p-0 m-0 text-danger">-${{ weekly_totals.weekly_total }}</h4>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <!-- Monthly -->
+                <section class="card-body pt-1 px-2 pb-1 border">
+                    <div class="row">
+                        <div class="col-12 d-inline-block">
+                            <div class="p-1">
+
+                                <div class="d-flex justify-content-between">
+                                    <h4 class="p-0 m-0">Monthly</h4>
+                                    <h4 class="p-0 m-0 text-danger">-${{ monthly_totals.monthly_total }}</h4>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <!-- Yearly -->
+                <section class="card-body pt-1 px-2 pb-1 border">
+                    <div class="row">
+                        <div class="col-12 d-inline-block">
+                            <div class="p-1">
+
+                                <div class="d-flex justify-content-between">
+                                    <h4 class="p-0 m-0">Yearly</h4>
+                                    <h4 class="p-0 m-0 text-danger">-${{ yearly_totals.yearly_total }}</h4>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Expense Records -->
+                {% for expense in expenses %}
+                <section class="card-body pt-1 px-2 pb-1">
+                    <div class="row">
+                        <div class="col-12 d-inline-block">
+                            <div class="data-row">
+                                <p>{{ expense.source }}<span>{{ expense.date }}</span></p>
+                                <div class="mt-2">
+                                    <a href="{% url 'update_expense' expense_id=expense.id %}" class="btn btn-warning btn-sm">Update</a>
+                                    <a href="{% url 'delete_expense' expense_id=expense.id %}" class="btn btn-danger btn-sm">Delete</a>
+                                </div>
+                                <p class="badge-money border bg-danger text-white">-${{ expense.amount }}</p>
+
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                {% endfor %}
+
+                <!-- Card Footer -->
+                <footer id="add-expense-button" data-bs-toggle="modal" data-bs-target="#add-expense-form">
+                    <p class="card-footer text-center fs-5 btn w-100 m-0">
+                        ADD
+                    </p>
+                </footer>
             </div>
+        </div>
+    </article>
+</div>
 
-        </form>
-    </dialog>
-</section>
+<!-- Model -->
 
+
+<!-- Instance Modal -->
+<div class="modal fade" id="add-expense-form" tabindex="-1" aria-labelledby="popupModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <section class="modal-content mt-5">
+            <!-- Header -->
+
+            <div class="card border-0 shadow">
+                <!-- Hedaer -->
+                <div class="card-header d-flex justify-content-between">
+                    <h3 class="card-title m-0 p-0">Add Record</h3>
+                    <button type="button" class="btn-close text-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+
+                <!-- Body -->
+                <form class="card-body p-0" method="post" action="{% url 'expenditure' %}">
+                    <div class="p-3">
+                        {% csrf_token %}
+                        {% for field in form %}
+                        <div class="form-group mt-3">
+                            {{ field|as_crispy_field }}
+                        </div>
+                        {% endfor %}
+                        <!-- Footer -->
+                    </div>
+                    <button type="submit" class="card-footer w-100 border-0 btn btn-primary">Record
+                        Expense</button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>    
+
+<!-- Custom JavaScript-->
+{% block postloadjs %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const addExpenseForm = document.getElementById('add-expense-form');
-    const addExpenseButton = document.getElementById('add-expense-button');
-    const closeButton = document.getElementById('add-expense-close-button');
+    // Get the context of the canvas element we want to select
+    const expCtx = document.getElementById('expenseGraph').getContext('2d');
+    
+    // Create gradients for each section
+    const gradientWeekly = expCtx.createLinearGradient(0, 0, 0, 400);
+    gradientWeekly.addColorStop(0, 'rgba(33, 150, 243, 1)'); // Start color
+    gradientWeekly.addColorStop(1, 'rgba(33, 150, 243, 0.2)'); // End color
 
-    addExpenseButton.addEventListener('click', () => {
-        addExpenseForm.show();
-    });
+    const gradientMonthly = expCtx.createLinearGradient(0, 0, 0, 400);
+    gradientMonthly.addColorStop(0, 'rgba(33, 203, 243, 1)');
+    gradientMonthly.addColorStop(1, 'rgba(33, 203, 243, 0.2)');
 
-    closeButton.addEventListener('click', () => {
-        addExpenseForm.close();
+    const gradientYearly = expCtx.createLinearGradient(0, 0, 0, 400);
+    gradientYearly.addColorStop(0, 'rgba(13, 71, 161, 1)');
+    gradientYearly.addColorStop(1, 'rgba(13, 71, 161, 0.2)');
+
+    // Parsing the Django context variables with null checks
+    const expWeekly = parseFloat('{{ weekly_totals.weekly_total }}') || 0;
+const expMonthly = parseFloat('{{ monthly_totals.monthly_total }}') || 0;
+const expYearly = parseFloat('{{ yearly_totals.yearly_total }}') || 0;
+    const expMax = Math.max(expWeekly, expMonthly / 4, expYearly / 52);
+
+    // Normalizing the values, avoiding division by zero
+    const normalizedExpWeekly = expMax !== 0 ? (expWeekly / expMax) * 100 : 0;
+    const normalizedExpMonthly = expMax !== 0 ? (expMonthly / 4 / expMax) * 100 : 0;
+    const normalizedExpYearly = expMax !== 0 ? (expYearly / 52 / expMax) * 100 : 0;
+
+    // Doughnut Chart for Expenses
+    const expenseChart = new Chart(expCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Weekly', 'Monthly', 'Yearly'],
+            datasets: [{
+                label: 'Expenditure',
+                data: [normalizedExpWeekly, normalizedExpMonthly, normalizedExpYearly],
+                backgroundColor: [gradientWeekly, gradientMonthly, gradientYearly],
+                borderColor: 'rgba(255, 255, 255, 1)', // White borders for a clean look
+                borderWidth: 2 // Adjust border width as needed
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutoutPercentage: 50, // Adjust this value to change the thickness of the doughnut
+            legend: {
+                labels: {
+                    fontColor: 'blue', // Adjust the legend label color to match the theme
+                }
+            },
+            tooltips: {
+                enabled: true,
+                mode: 'index',
+                intersect: false,
+                bodyFontColor: 'blue', // Adjust the tooltip font color to match the theme
+            },
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            }
+        }
     });
 </script>
+{% endblock postloadjs %}
 {% endblock %}

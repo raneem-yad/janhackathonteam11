@@ -1,18 +1,72 @@
 from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from django.db.models import Sum
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.utils.timezone import now
 from .forms import ExpenseForm, IncomeForm
 from .models import Expense, Income
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import WeeklyBudget, MonthlyBudget, YearlyBudget
-from .forms import WeeklyBudgetForm, MonthlyBudgetForm, YearlyBudgetForm
+from .models import WeeklyBudget, MonthlyBudget, YearlyBudget,DebtDetail
+from .forms import WeeklyBudgetForm, MonthlyBudgetForm, YearlyBudgetForm,DebtDetailForm
+from accounts.models import UserProfile
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.timezone import now
+from django.db.models import Min
+from django.forms.widgets import SelectDateWidget
+import json
+from django.template.loader import render_to_string
+from weasyprint import HTML
+#Premium Features
 
+
+@login_required
+def manage_debts(request):
+    user = request.user
+    starting_debt = UserProfile.objects.get(user=user).indebt  # Replace with actual field name
+    debts = DebtDetail.objects.filter(user=user)
+    total_current_debts = sum(debt.amount for debt in debts)
+
+
+    context = {
+        'debts': debts,
+        'starting_debt': starting_debt,
+        'total_current_debts': total_current_debts
+    }
+    return render(request, 'transactions/debts.html', context)
+
+@login_required
+def add_edit_debt(request, debt_id=None):
+    user = request.user
+    if debt_id:
+        debt = get_object_or_404(DebtDetail, id=debt_id, user=user)
+    else:
+        debt = None
+
+    if request.method == 'POST':
+        form = DebtDetailForm(request.POST, instance=debt)
+        if form.is_valid():
+            new_debt = form.save(commit=False)
+            new_debt.user = user
+            new_debt.save()
+            messages.success(request, 'Debt detail added/updated successfully!')
+            return redirect('manage_debts')
+    else:
+        form = DebtDetailForm(instance=debt)
+
+    return render(request, 'transactions/add_edit_debt.html', {'form': form, 'debt': debt})
+
+@login_required
+def delete_debt(request, debt_id):
+    debt = get_object_or_404(DebtDetail, id=debt_id, user=request.user)
+    if request.method == 'POST':
+        debt.delete()
+        messages.success(request, 'Debt deleted successfully!')
+        return redirect('manage_debts')
+    return render(request, 'transactions/delete_debt.html', {'debt': debt})
 
 @login_required
 def update_budget(request, budget_id, budget_type):
@@ -54,7 +108,7 @@ def manage_budgets(request):
     weekly_budgets = WeeklyBudget.objects.filter(user=user)
     monthly_budgets = MonthlyBudget.objects.filter(user=user)
     yearly_budgets = YearlyBudget.objects.filter(user=user)
-
+    
     if request.method == 'POST':
         # Handling Weekly Budget Form
         if 'weekly_budget' in request.POST:
@@ -140,6 +194,9 @@ def manage_budgets(request):
         'weekly_form': weekly_form,
         'monthly_form': monthly_form,
         'yearly_form': yearly_form,
+ 'weekly_budgets1': json.dumps([float(budget['amount']) for budget in WeeklyBudget.objects.values('amount')]),
+    'monthly_budgets1': json.dumps([float(budget['amount']) for budget in MonthlyBudget.objects.values('amount')]),
+    'yearly_budgets1': json.dumps([float(budget['amount']) for budget in YearlyBudget.objects.values('amount')]),
     }
     return render(request, 'transactions/manage_budgets.html', context)
 
@@ -165,6 +222,7 @@ def handle_budget_update_delete(request, budget_id, BudgetModel, budget_form, bu
     return redirect('manage_budgets')
 
 
+
 @login_required
 def income_view(request):
     if request.method == 'POST':
@@ -180,28 +238,33 @@ def income_view(request):
     else:
         form = IncomeForm()
 
-    # Calculate totals similarly as we did for expenses
     today = datetime.today()
+    start_of_week = today - timedelta(days=today.weekday())
     start_of_month = today.replace(day=1)
     start_of_year = today.replace(month=1, day=1)
+
+    weekly_income_total = Income.objects.filter(
+        user=request.user,
+        date__gte=start_of_week
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
 
     monthly_income_total = Income.objects.filter(
         user=request.user,
         date__gte=start_of_month
-    ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
 
     yearly_income_total = Income.objects.filter(
         user=request.user,
         date__gte=start_of_year
-    ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
 
     incomes = Income.objects.filter(user=request.user).order_by('-date')
-    datewise_totals = incomes.values('date').annotate(
-        total=Sum('amount')).order_by('-date')
+    datewise_totals = incomes.values('date').annotate(total=Sum('amount')).order_by('-date')
 
     context = {
         'form': form,
         'incomes': incomes,
+        'weekly_income_total': weekly_income_total,
         'monthly_income_total': monthly_income_total,
         'yearly_income_total': yearly_income_total,
     }
@@ -412,3 +475,69 @@ def delete_income(request, income_id):
         messages.success(request, 'Income deleted successfully!')
         return redirect('income')  # Replace with your view name
     return render(request, 'transactions/delete_income.html', {'income': income})
+
+
+@login_required
+def download_report(request):
+    user = request.user
+    today = datetime.today().date()
+
+    # Aggregate all necessary data
+    weekly_budgets = WeeklyBudget.objects.filter(user=user)
+    monthly_budgets = MonthlyBudget.objects.filter(user=user)
+    yearly_budgets = YearlyBudget.objects.filter(user=user)
+    incomes = Income.objects.filter(user=user).order_by('-date')
+    expenses = Expense.objects.filter(user=user).order_by('-date')
+    debts = DebtDetail.objects.filter(user=user)
+
+    # Additional aggregated data like total income, expenses etc.
+    total_income = incomes.aggregate(Sum('amount'))['amount__sum'] or 0
+    total_expense = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
+    total_debt = debts.aggregate(Sum('amount'))['amount__sum'] or 0
+  # Aggregate incomes and expenses for each budget
+    budget_data = []
+    for budget_list in [weekly_budgets, monthly_budgets, yearly_budgets]:
+        for budget in budget_list:
+            income_total = Income.objects.filter(
+                user=user, date__range=[budget.start_date, budget.end_date]).aggregate(Sum('amount'))['amount__sum'] or 0
+            expense_total = Expense.objects.filter(
+                user=user, date__range=[budget.start_date, budget.end_date]).aggregate(Sum('amount'))['amount__sum'] or 0
+
+            budget_data.append({
+                'type': budget.__class__.__name__.replace('Budget', ''),
+                'amount': budget.amount,
+                'start_date': budget.start_date,
+                'end_date': budget.end_date,
+                'income_total': income_total,
+                'expense_total': expense_total,
+                'surplus_deficit': income_total - expense_total
+            })
+    # Prepare context
+    context = {
+        'user': user,
+        'weekly_budgets': weekly_budgets,
+        'monthly_budgets': monthly_budgets,
+        'yearly_budgets': yearly_budgets,
+        'incomes': incomes,
+        'expenses': expenses,
+        'debts': debts,
+        'total_income': total_income,
+        'total_expense': total_expense,
+        'total_debt': total_debt,
+        'today': today,
+        'budget_data': budget_data,
+        # Add any other context data you need for the report
+    }
+
+    # Render the HTML template with context data
+    html_string = render_to_string('transactions/report_template.html', context)
+    html = HTML(string=html_string)
+
+    # Generate PDF
+    pdf = html.write_pdf()
+
+    # Prepare response
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="financial_report.pdf"'
+
+    return response

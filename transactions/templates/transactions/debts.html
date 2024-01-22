@@ -1,0 +1,74 @@
+{% extends 'dashboard-base/base.html' %}
+
+{% block content %}
+<section class="position-relative py-5" style="background-color: #f8f9fa;">
+    <div class="container mt-5">
+        <!-- Page Title and Add Debt Button -->
+        <div class="d-flex justify-content-center align-items-center mb-4">
+            <h1 class="page-title text-dark">Debts</h1>
+            <button class=" ms-3 btn btn-success" onclick="location.href='{% url 'add_debt' %}'">Add Debt</button>
+        </div>
+
+        <!-- Content Container -->
+        <div class="row">
+            <!-- Debts Summary Cards -->
+            <div class="col-12 col-lg-4 mb-3">
+                <div class="card bg-light shadow-sm">
+                    <div class="card-body">
+                        <h3 class="card-title text-secondary">Starting Debt</h3>
+                        <p class="card-text display-6">${{ starting_debt }}</p>
+                    </div>
+                </div>
+                <div class="card bg-light shadow-sm mt-3">
+                    <div class="card-body">
+                        <h3 class="card-title text-secondary">Total Current Debts</h3>
+                        <p class="card-text display-6">${{ total_current_debts }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Debts Table -->
+            <div class="col-12 col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-silver" style="background-color: silver;">
+                        <h2 class="card-title text-white">Recent Debts</h2>
+                    </div>
+                    <div class="card-body overflow-auto">
+                        {% if debts %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">Amount</th>
+                                    <th scope="col">Interest Rate</th>
+                                    <th scope="col">Interest Type</th>
+                                    <th scope="col">Last Updated</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for debt in debts %}
+                                <tr>
+                                    <td>{{ debt.debt_name }}</td>
+                                    <td>{{ debt.amount }}</td>
+                                    <td>{{ debt.interest_rate }}%</td>
+                                    <td>{{ debt.interest_type|title }}</td>
+                                    <td>{{ debt.last_updated }}</td>
+                                    <td>
+                                        <a class="btn btn-success btn-sm" href="{% url 'edit_debt' debt.id %}">Edit</a>
+                                        <a class="btn btn-danger btn-sm" href="{% url 'delete_debt' debt.id %}">Delete</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class='lead'>No debts recorded.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
